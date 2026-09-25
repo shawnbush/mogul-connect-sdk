@@ -24,7 +24,7 @@ export type MogulConnectSuccess = {
 export type MogulConnectOptions = {
   /** Embed host origin, e.g. `https://embed.usemogul.com`. */
   origin: string
-  /** Element the iframe is mounted into. */
+  /** Element the iframe is mounted into. Give it a height; the iframe fills it. */
   container: HTMLElement
   /**
    * Partner-supplied source of the session token. Called on `mogul:ready` and on
@@ -34,16 +34,15 @@ export type MogulConnectOptions = {
   getToken: () => Promise<string>
   /**
    * Your Mogul-issued partner client ID (`mcci_…`). Public, so safe to ship in
-   * browser code — never pass the client secret here. Sent alongside the token
-   * in every `mogul:init` so Mogul can verify which partner is embedding it.
+   * browser code — never pass the client secret here. Sent as `client_id` in the
+   * iframe URL and alongside the token in every `mogul:init` so Mogul can verify
+   * which partner is embedding it.
    */
   clientId: string
   /** Preselected `IntegrationTarget` → `/embed/connect/<target>`. Not a secret. */
   target?: string
   locale?: string
   onReady?: () => void
-  /** Defaults to setting `iframe.style.height`. Provide to take over sizing. */
-  onResize?: (height: number) => void
   onSuccess?: (result: MogulConnectSuccess) => void
   onExit?: () => void
   onError?: (err: { code: string }) => void
@@ -58,9 +57,17 @@ export type MogulConnectHandle = {
   destroy: () => void
 }
 
-const buildSrc = (embedOrigin: string, target?: string): string => {
-  const base = `${embedOrigin}/embed/connect`
-  return target ? `${base}/${encodeURIComponent(target)}` : base
+const buildSrc = (
+  embedOrigin: string,
+  clientId: string,
+  target?: string,
+): string => {
+  const path = target
+    ? `/embed/connect/${encodeURIComponent(target)}`
+    : '/embed/connect'
+  const url = new URL(path, embedOrigin)
+  url.searchParams.set('client_id', clientId)
+  return url.toString()
 }
 
 /**
@@ -84,11 +91,12 @@ export const create = (options: MogulConnectOptions): MogulConnectHandle => {
   const embedOrigin = new URL(options.origin).origin
 
   const iframe = document.createElement('iframe')
-  iframe.src = buildSrc(embedOrigin, target)
+  iframe.src = buildSrc(embedOrigin, clientId, target)
   iframe.title = 'Mogul Connect'
+  iframe.style.display = 'block'
   iframe.style.width = '100%'
+  iframe.style.height = '100%'
   iframe.style.border = '0'
-  iframe.style.height = '0px'
 
   let destroyed = false
   // Dedupe overlapping token fetches (e.g. a `ready` immediately followed by a
@@ -132,10 +140,6 @@ export const create = (options: MogulConnectOptions): MogulConnectHandle => {
         break
       case 'mogul:request-token':
         void sendInit()
-        break
-      case 'mogul:resize':
-        if (options.onResize) options.onResize(message.height)
-        else iframe.style.height = `${message.height}px`
         break
       case 'mogul:success':
         options.onSuccess?.({

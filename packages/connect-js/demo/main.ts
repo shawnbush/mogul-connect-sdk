@@ -44,11 +44,6 @@ form.addEventListener('submit', event => {
       return token
     },
     onReady: () => log('← ready'),
-    onResize: height => {
-      log('← resize', height)
-      const iframe = container.querySelector('iframe')
-      if (iframe) iframe.style.height = `${height}px`
-    },
     onSuccess: result => log('← success', result),
     onExit: () => log('← exit'),
     onError: err => log('← error', err),

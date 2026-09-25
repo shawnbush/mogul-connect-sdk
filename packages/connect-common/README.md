@@ -14,7 +14,8 @@ Zero runtime dependencies. Ships ESM + CJS + TypeScript types.
 - `ConnectedIdentity` — identity payload carried on `mogul:success`
 - `FRAME_EVENT` / `PARENT_EVENT` — event-name constants
 - `CONNECT_ERROR_CODE` / `ConnectErrorCode` — the `mogul:error` codes
-  (`token_error`, `invalid_target`, `client_mismatch`, `identity_unavailable`).
+  (`token_error`, `invalid_target`, `client_mismatch`, `identity_unavailable`,
+  `origin_not_allowed`, `verification_failed`).
   `mogul:error.code` stays typed as `string` on the wire, so handle unknown codes.
 - `parseFrameMessage(data)` — for the loader: validates untrusted `postMessage`
   data into a known `FrameMessage`, or `null`.

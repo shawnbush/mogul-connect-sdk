@@ -3,7 +3,7 @@
 The loader for the Mogul Connect component, a framework-agnostic browser library
 that a partner drops onto their page. Mounts an iframe pointing at the Mogul embed
 host and runs the parent side of a `postMessage` handshake — handing the frame a
-session token on request, auto-resizing to the frame's content, and surfacing
+session token on request, filling the container you give it, and surfacing
 `onSuccess` / `onExit` / `onError` callbacks.
 
 The connect flow that renders inside the iframe is hosted by Mogul; this package
@@ -22,7 +22,7 @@ import { MogulConnect } from '@usemogul/connect-js'
 
 const handle = MogulConnect.create({
   origin: 'https://embed.usemogul.com', // the Mogul embed host
-  container: document.getElementById('mogul-connect')!,
+  container: document.getElementById('mogul-connect')!, // must have a height
   getToken: async () => fetchSessionTokenFromYourBackend(), // always-fresh
   clientId: 'mcci_…', // your partner client ID (public — never the secret)
   target: 'DISTROKID', // optional: preselect a source; omit to display a search
@@ -41,19 +41,18 @@ Also available as a UMD/global build (`window.MogulConnect.create(...)`) via a
 
 ### Options
 
-| option      | type                                    | notes                                                                                                                             |
-| ----------- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `origin`    | `string`                                | Embed host origin. Required.                                                                                                      |
-| `container` | `HTMLElement`                           | Where the iframe mounts. Required.                                                                                                |
-| `getToken`  | `() => Promise<string>`                 | Returns a session token. Called on ready **and** every refresh.                                                                   |
-| `clientId`  | `string`                                | Your partner client ID (`mcci_…`). Required. Not a secret.                                                                        |
-| `target`    | `string`                                | Preselected `IntegrationTarget` (path segment, not a secret).                                                                     |
-| `locale`    | `string`                                | Forwarded in `mogul:init`.                                                                                                        |
-| `onReady`   | `() => void`                            | Frame mounted.                                                                                                                    |
-| `onResize`  | `(height: number) => void`              | Defaults to setting `iframe.style.height`.                                                                                        |
-| `onSuccess` | `(result: MogulConnectSuccess) => void` | A source connected and the user clicked Done.                                                                                     |
-| `onExit`    | `() => void`                            | Flow closed (cancelled or finished). Always last.                                                                                 |
-| `onError`   | `(err: { code: string }) => void`       | Frame or token error: `token_error`, `invalid_target`, `client_mismatch` or `identity_unavailable` ([error codes](#error-codes)). |
+| option      | type                                    | notes                                                                                                                           |
+| ----------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `origin`    | `string`                                | Embed host origin. Required.                                                                                                    |
+| `container` | `HTMLElement`                           | Where the iframe mounts. Required. Give it a height; the iframe fills it (otherwise it renders at the browser's 150px default). |
+| `getToken`  | `() => Promise<string>`                 | Returns a session token. Called on ready **and** every refresh.                                                                 |
+| `clientId`  | `string`                                | Your partner client ID (`mcci_…`). Required. Not a secret.                                                                      |
+| `target`    | `string`                                | Preselected `IntegrationTarget` (path segment, not a secret).                                                                   |
+| `locale`    | `string`                                | Forwarded in `mogul:init`.                                                                                                      |
+| `onReady`   | `() => void`                            | Frame mounted.                                                                                                                  |
+| `onSuccess` | `(result: MogulConnectSuccess) => void` | A source connected and the user clicked Done.                                                                                   |
+| `onExit`    | `() => void`                            | Flow closed (cancelled or finished). Always last.                                                                               |
+| `onError`   | `(err: { code: string }) => void`       | Frame or token error; see [error codes](#error-codes).                                                                          |
 
 `handle` exposes `iframe`, `logout()`, and `destroy()`.
 
@@ -81,6 +80,8 @@ treat unknown ones as a generic failure.
 | `invalid_target`       | frame      | `target` isn't a known source.                                                                                      |
 | `client_mismatch`      | frame      | `clientId` doesn't match the session token's `client_id` claim, so the token is refused and the flow never loads.   |
 | `identity_unavailable` | frame      | The source connected, but the integration or a complete identity couldn't be resolved, so `onSuccess` doesn't fire. |
+| `origin_not_allowed`   | frame      | Your page's origin isn't registered for your `clientId`, so the token is refused and the flow never loads.          |
+| `verification_failed`  | frame      | The frame couldn't reach Mogul to verify your origin. Transient: remount to retry.                                  |
 
 ### Frame behavior
 
@@ -91,7 +92,6 @@ sequenceDiagram
     F->>L: mogul:ready
     L->>F: mogul:init {token, clientId}
     Note over F: clientId must equal the token's client_id claim
-    F->>L: mogul:resize {height}
     F->>L: mogul:request-token (token near expiry)
     L->>F: mogul:init {token, clientId}
     F->>L: mogul:success {integrationId, accountId, connectedIdentity}
@@ -101,6 +101,11 @@ sequenceDiagram
 - **`clientId` is enforced.** The frame decodes the session token and compares
   its `client_id` claim with `clientId`. A mismatch, or a token with no claim, is
   refused with `client_mismatch`; the flow never loads.
+- **Your origin must be registered.** The frame only renders on pages whose
+  origin is registered for your `clientId` in Mogul. If you nest the loader in
+  your own iframe, register every ancestor page's origin too. Otherwise the
+  browser blocks the frame, or the frame refuses the token with
+  `origin_not_allowed`.
 - **Success is all-or-nothing.** `onSuccess` fires only when `integrationId`,
   `accountId`, `connectedIdentity.id`, `connectedIdentity.name` and a name for
   every account are all present. Otherwise `onError` gets `identity_unavailable`.
@@ -118,9 +123,9 @@ sequenceDiagram
 
 - The token travels **only** via `postMessage` — never in the iframe URL, a
   cookie, or `localStorage`. `getToken` is called on demand.
-- `clientId` is public and is sent with every token in `mogul:init`, so Mogul
-  can verify which partner is embedding the component. Never put your client
-  secret in browser code.
+- `clientId` is public. It's sent as `client_id` in the iframe URL and with
+  every token in `mogul:init`, so Mogul can verify which partner is embedding
+  the component. Never put your client secret in browser code.
 - Outbound messages always target the exact embed origin, never `'*'`.
 - Inbound messages are accepted only from the loader's own iframe and the exact
   embed origin, then shape-validated, before anything is acted on.
