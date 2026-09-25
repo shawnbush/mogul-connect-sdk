@@ -42,10 +42,6 @@ export const parseFrameMessage = (data: unknown): FrameMessage | null => {
     case 'mogul:request-token':
     case 'mogul:exit':
       return { type: message.type }
-    case 'mogul:resize':
-      return typeof message.height === 'number'
-        ? { type: 'mogul:resize', height: message.height }
-        : null
     case 'mogul:success': {
       const connectedIdentity = parseConnectedIdentity(
         message.connectedIdentity,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { parseFrameMessage, parseParentMessage } from './index'
+import {
+  CONNECT_ERROR_CODE,
+  parseFrameMessage,
+  parseParentMessage,
+} from './index'
 
 describe('parseFrameMessage', () => {
   it('accepts the no-payload events', () => {
@@ -8,15 +12,8 @@ describe('parseFrameMessage', () => {
     }
   })
 
-  it('validates resize height', () => {
-    expect(parseFrameMessage({ type: 'mogul:resize', height: 640 })).toEqual({
-      type: 'mogul:resize',
-      height: 640,
-    })
-    expect(parseFrameMessage({ type: 'mogul:resize' })).toBeNull()
-    expect(
-      parseFrameMessage({ type: 'mogul:resize', height: '640' }),
-    ).toBeNull()
+  it('rejects mogul:resize, which is no longer part of the contract', () => {
+    expect(parseFrameMessage({ type: 'mogul:resize', height: 640 })).toBeNull()
   })
 
   it('accepts a fully-formed success message', () => {
@@ -72,6 +69,15 @@ describe('parseFrameMessage', () => {
       code: 'x',
     })
     expect(parseFrameMessage({ type: 'mogul:error' })).toBeNull()
+  })
+
+  it('accepts every CONNECT_ERROR_CODE on error', () => {
+    for (const code of Object.values(CONNECT_ERROR_CODE)) {
+      expect(parseFrameMessage({ type: 'mogul:error', code })).toEqual({
+        type: 'mogul:error',
+        code,
+      })
+    }
   })
 
   it('rejects non-objects, unknown types, and parent-only messages', () => {

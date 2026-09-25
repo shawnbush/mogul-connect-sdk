@@ -11,7 +11,6 @@
 export const FRAME_EVENT = {
   ready: 'mogul:ready',
   requestToken: 'mogul:request-token',
-  resize: 'mogul:resize',
   success: 'mogul:success',
   exit: 'mogul:exit',
   error: 'mogul:error',
@@ -38,6 +37,17 @@ export const CONNECT_ERROR_CODE = {
    * identity couldn't be resolved, so no `mogul:success` is sent.
    */
   identityUnavailable: 'identity_unavailable',
+  /**
+   * Frame: the embedding page's origin isn't registered for the partner the
+   * session token belongs to (or the token's partner doesn't match `clientId`),
+   * so the token is refused and the flow never loads.
+   */
+  originNotAllowed: 'origin_not_allowed',
+  /**
+   * Frame: the frame couldn't reach Mogul to verify the embedding origin, so
+   * the token is refused. Transient: remount (or the next `mogul:init`) retries.
+   */
+  verificationFailed: 'verification_failed',
 } as const
 
 export type ConnectErrorCode =
@@ -60,7 +70,6 @@ export type ConnectedIdentity = {
 export type FrameMessage =
   | { type: 'mogul:ready' }
   | { type: 'mogul:request-token' }
-  | { type: 'mogul:resize'; height: number }
   | {
       /**
        * Sent when the user dismisses the success screen (Done), and only when

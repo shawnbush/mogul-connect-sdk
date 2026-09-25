@@ -54,17 +54,37 @@ afterEach(() => {
 })
 
 describe('MogulConnect.create', () => {
-  it('mounts an iframe at /embed/connect with full width', () => {
+  it('mounts an iframe at /embed/connect with the client_id', () => {
     const { container, handle } = setup()
     const iframe = container.querySelector('iframe')
     expect(iframe).toBe(handle.iframe)
-    expect(handle.iframe.src).toBe(`${ORIGIN}/embed/connect`)
+    expect(handle.iframe.src).toBe(
+      `${ORIGIN}/embed/connect?client_id=${CLIENT_ID}`,
+    )
+  })
+
+  it('fills its container', () => {
+    const { handle } = setup()
+    expect(handle.iframe.style.display).toBe('block')
     expect(handle.iframe.style.width).toBe('100%')
+    expect(handle.iframe.style.height).toBe('100%')
   })
 
   it('appends a preselected target as a path segment', () => {
     const { handle } = setup({ target: 'DISTROKID' })
-    expect(handle.iframe.src).toBe(`${ORIGIN}/embed/connect/DISTROKID`)
+    expect(handle.iframe.src).toBe(
+      `${ORIGIN}/embed/connect/DISTROKID?client_id=${CLIENT_ID}`,
+    )
+  })
+
+  it('URL-encodes the client_id', () => {
+    const { handle } = setup({ clientId: 'mcci_a&b=c' })
+    expect(handle.iframe.src).toBe(
+      `${ORIGIN}/embed/connect?client_id=mcci_a%26b%3Dc`,
+    )
+    expect(new URL(handle.iframe.src).searchParams.get('client_id')).toBe(
+      'mcci_a&b=c',
+    )
   })
 
   it('answers mogul:ready with mogul:init to the exact embed origin, never "*"', async () => {
@@ -103,9 +123,21 @@ describe('MogulConnect.create', () => {
   })
 
   it('never puts the token in the iframe URL', () => {
-    const { handle } = setup({ getToken: async () => 'super.secret.jwt' })
-    expect(handle.iframe.src).toBe(`${ORIGIN}/embed/connect`)
-    expect(handle.iframe.src).not.toContain('super.secret.jwt')
+    for (const target of [undefined, 'DISTROKID']) {
+      const { handle } = setup({
+        getToken: async () => 'super.secret.jwt',
+        target,
+      })
+      if (!target) {
+        expect(handle.iframe.src).toBe(
+          `${ORIGIN}/embed/connect?client_id=${CLIENT_ID}`,
+        )
+      }
+      expect(handle.iframe.src).not.toContain('super.secret.jwt')
+      expect([...new URL(handle.iframe.src).searchParams.keys()]).toEqual([
+        'client_id',
+      ])
+    }
   })
 
   it('ignores messages from the wrong origin', async () => {
@@ -147,18 +179,10 @@ describe('MogulConnect.create', () => {
     )
   })
 
-  it('sets the iframe height on mogul:resize by default', () => {
+  it('ignores mogul:resize', () => {
     const { handle, emit } = setup()
     emit({ type: 'mogul:resize', height: 640 })
-    expect(handle.iframe.style.height).toBe('640px')
-  })
-
-  it('defers to onResize when provided, leaving height untouched', () => {
-    const onResize = vi.fn()
-    const { handle, emit } = setup({ onResize })
-    emit({ type: 'mogul:resize', height: 640 })
-    expect(onResize).toHaveBeenCalledWith(640)
-    expect(handle.iframe.style.height).toBe('0px')
+    expect(handle.iframe.style.height).toBe('100%')
   })
 
   it('routes terminal events to their callbacks', () => {
